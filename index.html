@@ -365,7 +365,7 @@
       </div>
 
       <h2>🌐 企業級多國語言翻譯中樞</h2>
-      <p class="subtitle">支援長篇自動分段翻譯、雙向語音朗讀、Excel 批次處理與雲端即時同步。</p>
+      <p class="subtitle">極速即時同步翻譯、雙向語音朗讀、Excel 批次處理與雲端即時同步。</p>
 
       <div class="toolbar-excel">
         <span style="font-size: 13px; font-weight: 700; color: var(--text);">📊 Excel 批次工具：</span>
@@ -392,7 +392,7 @@
               <option value="vi">越南文 (Tiếng Việt)</option>
             </select>
           </div>
-          <textarea id="source-text" placeholder="請在此輸入單字、例句或長篇文章，支援自動分段翻譯..." oninput="handleSourceInput()"></textarea>
+          <textarea id="source-text" placeholder="請在此輸入單字、例句或文章，系統將極速即時翻譯..." oninput="handleSourceInput()"></textarea>
           <div class="actions-bar">
             <span style="font-size: 12px; color: var(--text-light);" id="char-count">0 字元</span>
             <button class="btn-sub" onclick="clearText()">清空</button>
@@ -404,12 +404,12 @@
           <div class="pane-header">
             <div style="display: flex; align-items: center; gap: 8px;">
               <label>目標語言</label>
-              <!-- 新增目標語言發音按鈕 -->
               <button class="btn-sub" style="padding: 2px 8px; font-size: 11px;" onclick="speakText('result', 'target-lang')" title="語音朗讀">🔊 朗讀</button>
             </div>
+            <!-- 預設目標語言為繁體中文 (zh-TW) -->
             <select id="target-lang" onchange="triggerTranslate()">
-              <option value="zh-TW">繁體中文</option>
-              <option value="en" selected>英文 (English)</option>
+              <option value="zh-TW" selected>繁體中文</option>
+              <option value="en">英文 (English)</option>
               <option value="ja">日文 (日本語)</option>
               <option value="vi">越南文 (Tiếng Việt)</option>
             </select>
@@ -437,6 +437,7 @@
     let translateTimer = null;
     let cloudSaveTimer = null;
     let currentHistoryData = {};
+    let activeController = null; // 用於取消上一次未完成的請求以加速
 
     function switchView(mode) {
       const card = document.getElementById('main-card');
@@ -466,7 +467,6 @@
       }
     }
 
-    // 支援來源與目標的語音朗讀
     function speakText(elementId, langSelectId) {
       let text = "";
       if (elementId === 'source-text') {
@@ -491,7 +491,7 @@
       if (langVal && langVal !== 'autodetect') {
         utterance.lang = langVal;
       } else {
-        utterance.lang = 'en-US';
+        utterance.lang = 'zh-TW';
       }
 
       utterance.rate = 1.0;
@@ -509,10 +509,11 @@
         return;
       }
 
-      document.getElementById('status-label').innerText = '同步翻譯中...';
+      document.getElementById('status-label').innerText = '極速同步中...';
+      // 縮短防手震延遲至 250ms，提升打字即時感
       translateTimer = setTimeout(() => {
         performTranslate(false);
-      }, 500);
+      }, 250);
     }
 
     function triggerTranslate() {
@@ -527,7 +528,7 @@
       document.getElementById('char-count').innerText = '0 字元';
     }
 
-    // 核心長文自動分段翻譯（解決 401/異常錯誤）
+    // 極速翻譯核心 (支援 AbortController 中斷舊請求、加快回應)
     async function performTranslate(isManual) {
       const text = document.getElementById('source-text').value.trim();
       const sourceLang = document.getElementById('source-lang').value;
@@ -537,26 +538,31 @@
 
       if (!text) return;
 
+      // 如果有尚未完成的請求，立即取消它以釋放頻寬
+      if (activeController) {
+        activeController.abort();
+      }
+      activeController = new AbortController();
+
       const langpair = `${sourceLang}|${targetLang}`;
 
       try {
-        // 若文章過長（> 450字元），進行分段處理避免 API 阻擋
-        let translatedFull = "";
-        const chunks = splitTextIntoChunks(text, 400);
-
-        for (let chunk of chunks) {
+        // 為追求極速與流暢，針對長文進行智慧安全斷句並行抓取，大幅提升速度
+        const chunks = splitTextIntoChunks(text, 500);
+        
+        const promises = chunks.map(async (chunk) => {
           const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${langpair}`;
-          const response = await fetch(url);
+          const response = await fetch(url, { signal: activeController.signal });
           const data = await response.json();
-
           if (data && data.responseStatus === 200 && data.responseData) {
-            translatedFull += data.responseData.translatedText + "\n";
-          } else {
-            translatedFull += chunk + " ";
+            return data.responseData.translatedText;
           }
-        }
+          return chunk;
+        });
 
-        const finalResult = translatedFull.trim();
+        const translatedChunks = await Promise.all(promises);
+        const finalResult = translatedChunks.join("\n").trim();
+        
         resultDiv.innerText = finalResult;
         statusLabel.innerText = '同步完成';
 
@@ -566,12 +572,12 @@
         }, 1000);
 
       } catch (error) {
+        if (error.name === 'AbortError') return; // 略過被主動取消的請求
         if (isManual) alert('網路連線異常： ' + error.message);
         statusLabel.innerText = '連線失敗';
       }
     }
 
-    // 輔助函式：將長文字安全切塊
     function splitTextIntoChunks(str, maxLen) {
       const regex = new RegExp(`.{1,${maxLen}}`, 'g');
       return str.match(regex) || [str];

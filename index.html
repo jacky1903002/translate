@@ -72,7 +72,6 @@
       background: linear-gradient(90deg, var(--primary), var(--accent));
     }
 
-    /* 頂部表頭與所有按鈕完美並排整合 */
     .top-header-row {
       display: flex;
       justify-content: space-between;
@@ -185,7 +184,6 @@
       color: var(--primary);
     }
 
-    /* 翻譯窗格最大化：高度提升至 320px */
     .translator-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -256,7 +254,20 @@
       border-color: var(--primary);
     }
 
-    /* 雲端紀錄區塊：固定高度僅顯示兩筆，其餘向下捲動 */
+    /* 錄音中特效按鈕 */
+    .btn-sub.recording {
+      background: #ef4444 !important;
+      color: #fff !important;
+      border-color: #dc2626 !important;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
     .history-section {
       margin-top: 10px;
       padding-top: 8px;
@@ -264,8 +275,8 @@
     }
 
     .history-list {
-      max-height: 72px; /* 剛好容納約兩筆紀錄的高度 */
-      overflow-y: auto;  /* 拉動式向下顯示 */
+      max-height: 72px;
+      overflow-y: auto;
       font-size: 12px;
       color: var(--text-light);
       background: #fdfdfd;
@@ -331,7 +342,6 @@
 <body>
 
   <div class="card" id="main-card">
-    <!-- 頂部表頭：將標題與所有 Excel / 檢視按鈕完美整合在右側 -->
     <div class="top-header-row">
       <div class="header-left">
         <h2>🌐 企業級多國語言翻譯中樞</h2>
@@ -382,7 +392,6 @@
         <button class="btn-sub" onclick="handleLogout()" style="padding: 2px 8px;">登出系統</button>
       </div>
 
-      <!-- 翻譯窗格極大化 -->
       <div class="translator-grid">
         <!-- 來源輸入 -->
         <div>
@@ -390,6 +399,8 @@
             <div style="display: flex; align-items: center; gap: 6px;">
               <label>來源語言</label>
               <button class="btn-sub" style="padding: 1px 5px; font-size: 10px;" onclick="speakText('source-text', 'source-lang')" title="語音朗讀">🔊 朗讀</button>
+              <!-- 新增語音辨識按鈕 -->
+              <button class="btn-sub" id="btn-mic" style="padding: 1px 5px; font-size: 10px;" onclick="toggleSpeechRecognition()" title="語音輸入">🎤 語音</button>
             </div>
             <select id="source-lang" onchange="triggerTranslate()">
               <option value="autodetect">自動偵測語言</option>
@@ -399,7 +410,7 @@
               <option value="vi">越南文 (Tiếng Việt)</option>
             </select>
           </div>
-          <textarea id="source-text" placeholder="請在此輸入單字、例句或長篇文章，系統將極速即時翻譯..." oninput="handleSourceInput()"></textarea>
+          <textarea id="source-text" placeholder="請在此輸入或點擊語音按鈕說話，系統將自動即時翻譯..." oninput="handleSourceInput()"></textarea>
           <div class="actions-bar">
             <span style="font-size: 11px; color: var(--text-light);" id="char-count">0 字元</span>
             <button class="btn-sub" onclick="clearText()">清空</button>
@@ -428,7 +439,7 @@
         </div>
       </div>
 
-      <!-- 雲端紀錄（只顯示兩筆高，可拉動向下顯示） -->
+      <!-- 雲端紀錄 -->
       <div class="history-section">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
           <label style="margin-bottom: 0; font-size: 12px;">📊 即時雲端翻譯紀錄</label>
@@ -444,6 +455,75 @@
     let cloudSaveTimer = null;
     let currentHistoryData = {};
     let activeController = null;
+    let recognition = null;
+    let isRecording = false;
+
+    // 初始化瀏覽器語音辨識 (SpeechRecognition API)
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        return null;
+      }
+      const rec = new SpeechRecognition();
+      rec.continuous = false; // 單次短語或連續語音
+      rec.interimResults = true; // 顯示即時辨識中文字
+
+      const sourceLang = document.getElementById('source-lang').value;
+      rec.lang = (sourceLang !== 'autodetect') ? sourceLang : 'zh-TW';
+
+      rec.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        document.getElementById('source-text').value = transcript;
+        handleSourceInput(); // 自動觸發即時同步翻譯
+      };
+
+      rec.onerror = (event) => {
+        console.error('語音辨識錯誤:', event.error);
+        stopSpeechRecognition();
+      };
+
+      rec.onend = () => {
+        stopSpeechRecognition();
+      };
+
+      return rec;
+    }
+
+    function toggleSpeechRecognition() {
+      const btnMic = document.getElementById('btn-mic');
+      if (!isRecording) {
+        recognition = initSpeechRecognition();
+        if (!recognition) {
+          alert('您的瀏覽器不支援語音辨識功能（建議使用 Chrome 或 Edge 瀏覽器）。');
+          return;
+        }
+        try {
+          recognition.start();
+          isRecording = true;
+          btnMic.classList.add('recording');
+          btnMic.innerText = '⏹ 停止';
+          document.getElementById('status-label').innerText = '正在聆聽語音...';
+        } catch (e) {
+          console.error(e);
+        }
+      } else {
+        stopSpeechRecognition();
+      }
+    }
+
+    function stopSpeechRecognition() {
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
+      isRecording = false;
+      const btnMic = document.getElementById('btn-mic');
+      btnMic.classList.remove('recording');
+      btnMic.innerText = '🎤 語音';
+      document.getElementById('status-label').innerText = '就緒';
+    }
 
     function switchView(mode) {
       const card = document.getElementById('main-card');

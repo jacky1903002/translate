@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GlobalTranslate Hub - 企業級多國語言翻譯平台</title>
   
-  <!-- PWA Manifest 支援手機安裝 -->
   <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22GlobalTranslate%20Hub%22%2C%22short_name%22%3A%22Translate%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f8fafc%22%2C%22theme_color%22%3A%22%234f46e5%22%2C%22icons%22%3A%5B%5D%7D">
   <meta name="theme-color" content="#4f46e5">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- 引入 SheetJS (xlsx) 用於 Excel 匯入與匯出 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     :root {
@@ -37,7 +37,6 @@
       align-items: center;
     }
 
-    /* 容器預設為寬螢幕網頁版，當套用 mobile-mode 時會模擬手機窄螢幕框 */
     .card {
       background: var(--card-bg);
       padding: 40px;
@@ -48,7 +47,7 @@
       overflow: hidden;
       width: 100%;
       max-width: 1000px;
-      transition: max-width 0.3s ease, padding 0.3s ease;
+      transition: all 0.3s ease;
     }
 
     /* 手機模擬模式尺寸 */
@@ -57,6 +56,13 @@
       padding: 24px !important;
       border-radius: 36px;
       border: 8px solid #1e293b;
+    }
+
+    /* 卡牌浮動模式 (帶有立體懸浮感與霓虹光暈) */
+    .card.floating-card-mode {
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.25), 0 0 20px rgba(6, 182, 212, 0.15);
+      border: 2px solid var(--accent);
     }
 
     .card::before {
@@ -69,12 +75,12 @@
       background: linear-gradient(90deg, var(--primary), var(--accent));
     }
 
-    /* 頂部檢視模式切換列 */
     .view-switcher {
       display: flex;
       justify-content: flex-end;
       gap: 8px;
       margin-bottom: 16px;
+      flex-wrap: wrap;
     }
 
     h2 {
@@ -91,7 +97,7 @@
     p.subtitle {
       color: var(--text-light);
       font-size: 15px;
-      margin-bottom: 30px;
+      margin-bottom: 24px;
       font-weight: 400;
     }
 
@@ -159,8 +165,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 24px;
-      padding-bottom: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
     }
 
@@ -174,10 +180,9 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 24px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
-    /* 當外層切換為手機模擬模式時，翻譯區塊強制改為單欄上下排列 */
     .card.mobile-mode .translator-grid {
       grid-template-columns: 1fr !important;
     }
@@ -240,14 +245,26 @@
       border-color: var(--primary);
     }
 
+    .toolbar-excel {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      background: #f8fafc;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      align-items: center;
+    }
+
     .history-section {
-      margin-top: 30px;
-      padding-top: 20px;
+      margin-top: 24px;
+      padding-top: 16px;
       border-top: 1px dashed var(--border);
     }
 
     .history-list {
-      max-height: 150px;
+      max-height: 140px;
       overflow-y: auto;
       font-size: 13px;
       color: var(--text-light);
@@ -312,16 +329,17 @@
 
   <!-- 主卡片容器 -->
   <div class="card" id="main-card">
-    <!-- 畫面檢視模式切換列 (網頁版 / 手機版切換) -->
+    <!-- 畫面控制列 (網頁版 / 手機版 / 卡牌浮動模式切換) -->
     <div class="view-switcher">
-      <button class="btn-sub active" id="btn-desktop-view" onclick="switchView('desktop')">💻 網頁版檢視</button>
-      <button class="btn-sub" id="btn-mobile-view" onclick="switchView('mobile')">📱 手機版檢視</button>
+      <button class="btn-sub active" id="btn-desktop-view" onclick="switchView('desktop')">💻 網頁版</button>
+      <button class="btn-sub" id="btn-mobile-view" onclick="switchView('mobile')">📱 手機版</button>
+      <button class="btn-sub" id="btn-floating-mode" onclick="toggleFloatingMode()">✨ 卡牌浮動模式</button>
     </div>
 
     <!-- ================= 登入 / 註冊畫面 ================= -->
     <div id="auth-screen">
       <h2>🚀 GlobalTranslate 企業平台</h2>
-      <p class="subtitle">請先完成帳號登入或快速註冊以使用商業翻譯服務。</p>
+      <p class="subtitle">請先完成帳號登入或快速註冊以使用商業翻譯與 Excel 批次處理服務。</p>
       
       <div class="form-group">
         <label for="nickname-input">使用者暱稱</label>
@@ -352,14 +370,28 @@
       </div>
 
       <h2>🌐 企業級多國語言翻譯中樞</h2>
-      <p class="subtitle">支援中、英、日、越高效互譯，翻譯數據將自動同步至 Firebase 雲端資料庫。</p>
+      <p class="subtitle">輸入文字即時同步翻譯；支援語音朗讀、Excel 批次匯入/匯出與雲端同步。</p>
+
+      <!-- Excel 批次操作工具列 -->
+      <div class="toolbar-excel">
+        <span style="font-size: 13px; font-weight: 700; color: var(--text);">📊 Excel 批次工具：</span>
+        <button class="btn-sub" onclick="downloadExcelTemplate()">📥 下載 Excel 範本</button>
+        <label class="btn-sub" style="margin-bottom: 0; cursor: pointer; background: #e0e7ff; color: #3730a3; border-color: #c7d2fe;">
+          📂 匯入 Excel 翻譯 <input type="file" id="excel-file-input" accept=".xlsx, .xls" style="display: none;" onchange="handleExcelImport(event)">
+        </label>
+        <button class="btn-sub" onclick="exportCurrentToExcel()">📤 匯出目前翻譯結果</button>
+      </div>
 
       <div class="translator-grid">
         <!-- 來源輸入 -->
         <div>
           <div class="pane-header">
-            <label>來源語言</label>
-            <select id="source-lang">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <label>來源語言</label>
+              <!-- 發音按鈕 (喇叭圖示) -->
+              <button class="btn-sub" style="padding: 2px 8px; font-size: 11px;" onclick="speakSourceText()" title="語音朗讀">🔊 朗讀</button>
+            </div>
+            <select id="source-lang" onchange="triggerTranslate()">
               <option value="autodetect">自動偵測語言</option>
               <option value="zh-TW">繁體中文</option>
               <option value="en">英文 (English)</option>
@@ -367,10 +399,11 @@
               <option value="vi">越南文 (Tiếng Việt)</option>
             </select>
           </div>
-          <textarea id="source-text" placeholder="請在此輸入要翻譯的業務文件或段落..."></textarea>
+          <!-- 支援即時同步監聽 (input事件) -->
+          <textarea id="source-text" placeholder="請在此輸入單字或例句，將自動即時翻譯..." oninput="handleSourceInput()"></textarea>
           <div class="actions-bar">
             <span style="font-size: 12px; color: var(--text-light);" id="char-count">0 字元</span>
-            <button class="btn-sub" onclick="document.getElementById('source-text').value='';">清空</button>
+            <button class="btn-sub" onclick="clearText()">清空</button>
           </div>
         </div>
 
@@ -378,14 +411,14 @@
         <div>
           <div class="pane-header">
             <label>目標語言</label>
-            <select id="target-lang">
+            <select id="target-lang" onchange="triggerTranslate()">
               <option value="zh-TW">繁體中文</option>
               <option value="en" selected>英文 (English)</option>
               <option value="ja">日文 (日本語)</option>
               <option value="vi">越南文 (Tiếng Việt)</option>
             </select>
           </div>
-          <div id="result" class="result-box">等待翻譯內容輸入...</div>
+          <div id="result" class="result-box">即時翻譯結果將顯示於此...</div>
           <div class="actions-bar">
             <span style="font-size: 12px; color: var(--text-light);" id="status-label">就緒</span>
             <button class="btn-sub" onclick="copyResult()">複製結果</button>
@@ -393,17 +426,23 @@
         </div>
       </div>
 
-      <button class="btn-main" onclick="translateText()">執行專業翻譯並同步雲端</button>
-
       <!-- 雲端紀錄同步區 -->
       <div class="history-section">
-        <label style="margin-bottom: 8px;">📊 Firebase 即時雲端翻譯紀錄</label>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <label style="margin-bottom: 0;">📊 Firebase 即時雲端翻譯紀錄</label>
+          <button class="btn-sub" style="background: #ecfdf5; color: #065f46; border-color: #a7f3d0;" onclick="exportHistoryToExcel()">📥 一鍵匯出雲端紀錄 Excel</button>
+        </div>
         <div id="history-list" class="history-list">正在載入歷史資料...</div>
       </div>
     </div>
   </div>
 
   <script>
+    // 防手震計時器 (用於即時同步翻譯)
+    let translateTimer = null;
+    let cloudSaveTimer = null;
+    let currentHistoryData = {}; // 暫存雲端歷史以便匯出
+
     // 切換網頁版 / 手機版模擬畫面
     function switchView(mode) {
       const card = document.getElementById('main-card');
@@ -420,6 +459,281 @@
         btnMobile.classList.remove('active');
       }
     }
+
+    // 切換卡牌浮動模式
+    function toggleFloatingMode() {
+      const card = document.getElementById('main-card');
+      const btnFloating = document.getElementById('btn-floating-mode');
+      card.classList.toggle('floating-card-mode');
+      if (card.classList.contains('floating-card-mode')) {
+        btnFloating.style.background = 'var(--primary)';
+        btnFloating.style.color = '#fff';
+      } else {
+        btnFloating.style.background = '';
+        btnFloating.style.color = '';
+      }
+    }
+
+    // 瀏覽器語音發音功能 (支援單字或例句)
+    function speakSourceText() {
+      const text = document.getElementById('source-text').value.trim();
+      if (!text) {
+        alert('請先輸入要朗讀的單字或例句！');
+        return;
+      }
+      if (!('speechSynthesis' in window)) {
+        alert('您的瀏覽器不支援語音朗讀功能！');
+        return;
+      }
+
+      window.speechSynthesis.cancel(); // 停止先前的朗讀
+      const utterance = new SpeechSynthesisUtterance(text);
+      
+      // 自動根據所選來源語言設定語音代碼
+      const sourceLang = document.getElementById('source-lang').value;
+      if (sourceLang !== 'autodetect') {
+        utterance.lang = sourceLang;
+      } else {
+        utterance.lang = 'en-US'; // 預設英文
+      }
+      
+      utterance.rate = 1.0; // 正常語速
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // 即時輸入同步觸發翻譯
+    function handleSourceInput() {
+      const text = document.getElementById('source-text').value;
+      document.getElementById('char-count').innerText = `${text.length} 字元`;
+
+      clearTimeout(translateTimer);
+      if (!text.trim()) {
+        document.getElementById('result').innerText = '即時翻譯結果將顯示於此...';
+        document.getElementById('status-label').innerText = '就緒';
+        return;
+      }
+
+      // 停止 400ms 後自動發動翻譯與雲端同步，達到流暢體驗
+      document.getElementById('status-label').innerText = '同步翻譯中...';
+      translateTimer = setTimeout(() => {
+        performTranslate(false); // 不強制彈出錯誤
+      }, 400);
+    }
+
+    function triggerTranslate() {
+      const text = document.getElementById('source-text').value.trim();
+      if (text) performTranslate(true);
+    }
+
+    function clearText() {
+      document.getElementById('source-text').value = '';
+      document.getElementById('result').innerText = '即時翻譯結果將顯示於此...';
+      document.getElementById('status-label').innerText = '就緒';
+      document.getElementById('char-count').innerText = '0 字元';
+    }
+
+    // 執行核心翻譯 API
+    async function performTranslate(isManual) {
+      const text = document.getElementById('source-text').value.trim();
+      const sourceLang = document.getElementById('source-lang').value;
+      const targetLang = document.getElementById('target-lang').value;
+      const resultDiv = document.getElementById('result');
+      const statusLabel = document.getElementById('status-label');
+
+      if (!text) return;
+
+      const langpair = `${sourceLang}|${targetLang}`;
+      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data && data.responseStatus === 200 && data.responseData) {
+          const translated = data.responseData.translatedText;
+          resultDiv.innerText = translated;
+          statusLabel.innerText = '同步完成';
+
+          // 透過防手震將翻譯結果寫入 Firebase 雲端紀錄
+          clearTimeout(cloudSaveTimer);
+          cloudSaveTimer = setTimeout(() => {
+            saveToCloud(text, translated, langpair);
+          }, 1000);
+
+        } else {
+          resultDiv.innerText = '翻譯異常';
+          statusLabel.innerText = '錯誤';
+        }
+      } catch (error) {
+        if (isManual) alert('網路連線異常：' + error.message);
+        statusLabel.innerText = '連線失敗';
+      }
+    }
+
+    // 儲存至 Firebase 雲端
+    async function saveToCloud(source, target, langpair) {
+      const user = window.firebaseAuth.currentUser;
+      if (user) {
+        const historyRef = window.ref(window.firebaseDb, 'translations/' + user.uid);
+        const newEntryRef = window.push(historyRef);
+        await window.set(newEntryRef, {
+          source: source,
+          target: target,
+          langpair: langpair,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+
+    // 即時讀取雲端翻譯紀錄
+    function loadTranslationHistory(uid) {
+      const historyRef = window.ref(window.firebaseDb, 'translations/' + uid);
+      window.onValue(historyRef, (snapshot) => {
+        const listContainer = document.getElementById('history-list');
+        listContainer.innerHTML = '';
+        
+        const data = snapshot.val();
+        currentHistoryData = data || {};
+
+        if (!data) {
+          listContainer.innerHTML = '<div class="history-item">尚無翻譯紀錄</div>';
+          return;
+        }
+
+        const items = Object.values(data).reverse();
+        items.slice(0, 5).forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'history-item';
+          div.innerHTML = `<strong>[${item.langpair}]</strong> ${escapeHtml(item.source)} ➔ <span style="color:var(--primary);">${escapeHtml(item.target)}</span>`;
+          listContainer.appendChild(div);
+        });
+      });
+    }
+
+    // ================= Excel 功能模組 =================
+
+    // 1. 下載 Excel 範本
+    function downloadExcelTemplate() {
+      const templateData = [
+        { "來源單字或例句": "Hello, welcome to our company.", "說明": "請在左欄填入您要批次翻譯的文字" },
+        { "來源單字或例句": "Precision manufacturing process", "說明": "支援單字、片語或長篇例句" }
+      ];
+      const worksheet = XLSX.utils.json_to_sheet(templateData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "翻譯範本");
+      XLSX.writeFile(workbook, "Translate_Template.xlsx");
+    }
+
+    // 2. 匯入 Excel 進行大量批次翻譯
+    async function handleExcelImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet);
+
+          if (json.length === 0) {
+            alert('Excel 檔案內沒有找到資料！');
+            return;
+          }
+
+          // 尋找可能的欄位名稱
+          const keyName = Object.keys(json[0])[0];
+          let batchResults = [];
+          const targetLang = document.getElementById('target-lang').value;
+
+          document.getElementById('status-label').innerText = '批次翻譯中...';
+
+          for (let row of json) {
+            const text = row[keyName];
+            if (text) {
+              const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${targetLang}`;
+              try {
+                const res = await fetch(url);
+                const jsonRes = await res.json();
+                const translated = (jsonRes && jsonRes.responseData) ? jsonRes.responseData.translatedText : "翻譯失敗";
+                batchResults.push({
+                  "原始單字/例句": text,
+                  "目標語言": targetLang,
+                  "對應翻譯": translated,
+                  "時間": new Date().toLocaleString()
+                });
+              } catch (err) {
+                batchResults.push({ "原始單字/例句": text, "目標語言": targetLang, "對應翻譯": "連線錯誤", "時間": new Date().toLocaleString() });
+              }
+            }
+          }
+
+          // 自動匯出批次翻譯完成的 Excel
+          const newWs = XLSX.utils.json_to_sheet(batchResults);
+          const newWb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(newWb, newWs, "批次翻譯結果");
+          XLSX.writeFile(newWb, "Batch_Translation_Result.xlsx");
+
+          document.getElementById('status-label').innerText = '批次匯出完成';
+          alert(`成功完成 ${batchResults.length} 筆資料的批次翻譯與 Excel 匯出！`);
+          event.target.value = ''; // 重置 file input
+        } catch (error) {
+          alert('解析 Excel 失敗： ' + error.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // 3. 匯出目前畫面的翻譯結果
+    function exportCurrentToExcel() {
+      const source = document.getElementById('source-text').value.trim();
+      const result = document.getElementById('result').innerText;
+      const sourceLang = document.getElementById('source-lang').value;
+      const targetLang = document.getElementById('target-lang').value;
+
+      if (!source || result.includes('顯示於此')) {
+        alert('目前沒有可匯出的翻譯內容！');
+        return;
+      }
+
+      const exportData = [{
+        "來源語言": sourceLang,
+        "原始單字/例句": source,
+        "目標語言": targetLang,
+        "對應翻譯": result,
+        "匯出時間": new Date().toLocaleString()
+      }];
+
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "單筆翻譯");
+      XLSX.writeFile(wb, "Current_Translation.xlsx");
+    }
+
+    // 4. 一鍵將 Firebase 即時雲端歷史紀錄匯出為 Excel
+    function exportHistoryToExcel() {
+      if (!currentHistoryData || Object.keys(currentHistoryData).length === 0) {
+        alert('目前雲端沒有可匯出的歷史紀錄！');
+        return;
+      }
+
+      const historyArray = Object.values(currentHistoryData).map((item, index) => ({
+        "編號": index + 1,
+        "語言配對": item.langpair,
+        "原始文字": item.source,
+        "翻譯結果": item.target,
+        "記錄時間": item.timestamp
+      }));
+
+      const ws = XLSX.utils.json_to_sheet(historyArray);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "雲端翻譯紀錄");
+      XLSX.writeFile(wb, "Firebase_Translation_History.xlsx");
+    }
+
+    // ================= 用戶與系統基礎函數 =================
 
     async function handleAuth(action) {
       const email = document.getElementById('email-input').value.trim();
@@ -456,83 +770,13 @@
       });
     }
 
-    async function translateText() {
-      const text = document.getElementById('source-text').value.trim();
-      const sourceLang = document.getElementById('source-lang').value;
-      const targetLang = document.getElementById('target-lang').value;
-      const resultDiv = document.getElementById('result');
-      const statusLabel = document.getElementById('status-label');
-
-      if (!text) {
-        alert('請輸入要翻譯的文字內容！');
-        return;
-      }
-
-      resultDiv.innerText = '翻譯進行中...';
-      statusLabel.innerText = '處理中';
-
-      const langpair = `${sourceLang}|${targetLang}`;
-      const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
-
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data && data.responseStatus === 200 && data.responseData) {
-          const translated = data.responseData.translatedText;
-          resultDiv.innerText = translated;
-          statusLabel.innerText = '翻譯完成';
-
-          const user = window.firebaseAuth.currentUser;
-          if (user) {
-            const historyRef = window.ref(window.firebaseDb, 'translations/' + user.uid);
-            const newEntryRef = window.push(historyRef);
-            await window.set(newEntryRef, {
-              source: text,
-              target: translated,
-              langpair: langpair,
-              timestamp: new Date().toISOString()
-            });
-          }
-        } else {
-          resultDiv.innerText = '翻譯失敗，請稍後再試。';
-          statusLabel.innerText = '錯誤';
-        }
-      } catch (error) {
-        resultDiv.innerText = '網路連線異常：' + error.message;
-        statusLabel.innerText = '失敗';
-      }
-    }
-
-    function loadTranslationHistory(uid) {
-      const historyRef = window.ref(window.firebaseDb, 'translations/' + uid);
-      window.onValue(historyRef, (snapshot) => {
-        const listContainer = document.getElementById('history-list');
-        listContainer.innerHTML = '';
-        
-        const data = snapshot.val();
-        if (!data) {
-          listContainer.innerHTML = '<div class="history-item">尚無翻譯紀錄</div>';
-          return;
-        }
-
-        const items = Object.values(data).reverse();
-        items.slice(0, 5).forEach(item => {
-          const div = document.createElement('div');
-          div.className = 'history-item';
-          div.innerHTML = `<strong>[${item.langpair}]</strong> ${escapeHtml(item.source)} ➔ <span style="color:var(--primary);">${escapeHtml(item.target)}</span>`;
-          listContainer.appendChild(div);
-        });
-      });
-    }
-
     function escapeHtml(str) {
       return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     }
 
     function copyResult() {
       const text = document.getElementById('result').innerText;
-      if (!text || text.includes('等待')) {
+      if (!text || text.includes('顯示於此')) {
         alert('沒有可複製的翻譯結果！');
         return;
       }

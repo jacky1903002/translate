@@ -3,24 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GlobalTranslate Hub - 企業級多國語言翻譯平台</title>
+  <title>Enterprise Vocab Pro - 企業級多國語言翻譯平台</title>
   
-  <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22GlobalTranslate%20Hub%22%2C%22short_name%22%3A%22Translate%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f8fafc%22%2C%22theme_color%22%3A%22%234f46e5%22%2C%22icons%22%3A%5B%5D%7D">
-  <meta name="theme-color" content="#4f46e5">
+  <!-- 連結獨立的 manifest.json 設定檔 -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#58cc02">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
     :root {
-      --primary: #4f46e5;
-      --primary-hover: #4338ca;
+      --primary: #58cc02;
+      --primary-hover: #46a302;
       --accent: #06b6d4;
-      --bg: #f8fafc;
+      --bg: #f7f9fa;
       --card-bg: #ffffff;
       --text: #0f172a;
       --text-light: #475569;
       --border: #e2e8f0;
-      --shadow: 0 10px 25px -5px rgba(79, 70, 229, 0.08), 0 8px 10px -6px rgba(79, 70, 229, 0.08);
+      --shadow: 0 10px 25px -5px rgba(88, 204, 2, 0.08), 0 8px 10px -6px rgba(88, 204, 2, 0.08);
     }
 
     body {
@@ -58,7 +61,7 @@
 
     .card.floating-card-mode {
       transform: translateY(-6px);
-      box-shadow: 0 20px 40px -10px rgba(79, 70, 229, 0.25), 0 0 20px rgba(6, 182, 212, 0.15);
+      box-shadow: 0 20px 40px -10px rgba(88, 204, 2, 0.25), 0 0 20px rgba(6, 182, 212, 0.15);
       border: 2px solid var(--accent);
     }
 
@@ -144,12 +147,12 @@
 
     input:focus, select:focus, textarea:focus {
       border-color: var(--primary);
-      box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.12);
+      box-shadow: 0 0 0 4px rgba(88, 204, 2, 0.12);
     }
 
     .btn-main {
       width: 100%;
-      background: linear-gradient(135deg, var(--primary), var(--accent));
+      background: linear-gradient(135deg, var(--primary), var(--primary-hover));
       color: #fff;
       border: none;
       padding: 12px;
@@ -157,7 +160,7 @@
       font-weight: 700;
       border-radius: 10px;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+      box-shadow: 0 4px 12px rgba(88, 204, 2, 0.25);
       transition: transform 0.1s, opacity 0.2s;
     }
 
@@ -254,7 +257,6 @@
       border-color: var(--primary);
     }
 
-    /* 錄音中特效按鈕 */
     .btn-sub.recording {
       background: #ef4444 !important;
       color: #fff !important;
@@ -294,7 +296,18 @@
     }
   </style>
 
-  <!-- Firebase SDKs -->
+  <!-- PWA Service Worker 註冊碼與 Firebase SDKs -->
+  <script>
+    // 自動註冊同目錄下的 sw.js
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('Service Worker 註冊成功:', reg.scope))
+          .catch(err => console.log('Service Worker 註冊失敗:', err));
+      });
+    }
+  </script>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -344,7 +357,7 @@
   <div class="card" id="main-card">
     <div class="top-header-row">
       <div class="header-left">
-        <h2>🌐 企業級多國語言翻譯中樞</h2>
+        <h2>Enterprise Vocab Pro</h2>
       </div>
       <div class="toolbar-inline">
         <button class="btn-sub" onclick="downloadExcelTemplate()">📥 下載範本</button>
@@ -362,7 +375,7 @@
 
     <!-- 登入畫面 -->
     <div id="auth-screen">
-      <p style="color: var(--text-light); font-size: 14px; margin-top: 0;">請先完成帳號登入或快速註冊以使用商業翻譯與 Excel 批次處理服務。</p>
+      <p style="color: var(--text-light); font-size: 14px; margin-top: 0;">請先完成帳號登入或快速註冊以使用 VocabPro 商業翻譯與 Excel 批次處理服務。</p>
       
       <div class="form-group">
         <label for="nickname-input">使用者暱稱</label>
@@ -399,7 +412,6 @@
             <div style="display: flex; align-items: center; gap: 6px;">
               <label>來源語言</label>
               <button class="btn-sub" style="padding: 1px 5px; font-size: 10px;" onclick="speakText('source-text', 'source-lang')" title="語音朗讀">🔊 朗讀</button>
-              <!-- 新增語音辨識按鈕 -->
               <button class="btn-sub" id="btn-mic" style="padding: 1px 5px; font-size: 10px;" onclick="toggleSpeechRecognition()" title="語音輸入">🎤 語音</button>
             </div>
             <select id="source-lang" onchange="triggerTranslate()">
@@ -458,15 +470,14 @@
     let recognition = null;
     let isRecording = false;
 
-    // 初始化瀏覽器語音辨識 (SpeechRecognition API)
     function initSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         return null;
       }
       const rec = new SpeechRecognition();
-      rec.continuous = false; // 單次短語或連續語音
-      rec.interimResults = true; // 顯示即時辨識中文字
+      rec.continuous = false;
+      rec.interimResults = true;
 
       const sourceLang = document.getElementById('source-lang').value;
       rec.lang = (sourceLang !== 'autodetect') ? sourceLang : 'zh-TW';
@@ -477,7 +488,7 @@
           transcript += event.results[i][0].transcript;
         }
         document.getElementById('source-text').value = transcript;
-        handleSourceInput(); // 自動觸發即時同步翻譯
+        handleSourceInput();
       };
 
       rec.onerror = (event) => {

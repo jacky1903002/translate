@@ -411,7 +411,7 @@
             <div style="display: flex; align-items: center; gap: 6px;">
               <label>來源語言</label>
               <button class="btn-sub" style="padding: 1px 5px; font-size: 10px;" onclick="speakText('source-text', 'source-lang')" title="語音朗讀">🔊 朗讀</button>
-              <button class="btn-sub" id="btn-mic" style="padding: 1px 5px; font-size: 10px;" onclick="toggleSpeechRecognition()" title="語音輸入">🎤 語音</button>
+              <button class="btn-sub" id="btn-mic-source" style="padding: 1px 5px; font-size: 10px;" onclick="toggleSpeechRecognition('source')" title="語音輸入">🎤 語音</button>
             </div>
             <select id="source-lang" onchange="triggerTranslate()">
               <option value="autodetect">自動偵測語言</option>
@@ -435,6 +435,7 @@
             <div style="display: flex; align-items: center; gap: 6px;">
               <label>目標語言</label>
               <button class="btn-sub" style="padding: 1px 5px; font-size: 10px;" onclick="speakText('result', 'target-lang')" title="語音朗讀">🔊 朗讀</button>
+              <button class="btn-sub" id="btn-mic-target" style="padding: 1px 5px; font-size: 10px;" onclick="toggleSpeechRecognition('target')" title="語音輸入">🎤 語音</button>
             </div>
             <select id="target-lang" onchange="triggerTranslate()">
               <option value="zh-TW" selected>繁體中文</option>
@@ -470,8 +471,9 @@
     let activeController = null;
     let recognition = null;
     let isRecording = false;
+    let activeRecognitionPane = null;
 
-    function initSpeechRecognition() {
+    function initSpeechRecognition(pane) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
         return null;
@@ -480,16 +482,22 @@
       rec.continuous = false;
       rec.interimResults = true;
 
-      const sourceLang = document.getElementById('source-lang').value;
-      rec.lang = (sourceLang !== 'autodetect') ? sourceLang : 'zh-TW';
+      const langSelectId = pane === 'source' ? 'source-lang' : 'target-lang';
+      const langVal = document.getElementById(langSelectId).value;
+      rec.lang = (langVal && langVal !== 'autodetect') ? langVal : (pane === 'source' ? 'zh-TW' : 'en');
 
       rec.onresult = (event) => {
         let transcript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
-        document.getElementById('source-text').value = transcript;
-        handleSourceInput();
+        if (pane === 'source') {
+          document.getElementById('source-text').value = transcript;
+          handleSourceInput();
+        } else {
+          document.getElementById('result').innerText = transcript;
+          document.getElementById('status-label').innerText = '目標語音輸入完成';
+        }
       };
 
       rec.onerror = (event) => {
@@ -504,10 +512,11 @@
       return rec;
     }
 
-    function toggleSpeechRecognition() {
-      const btnMic = document.getElementById('btn-mic');
+    function toggleSpeechRecognition(pane) {
+      const btnMic = document.getElementById(pane === 'source' ? 'btn-mic-source' : 'btn-mic-target');
+      
       if (!isRecording) {
-        recognition = initSpeechRecognition();
+        recognition = initSpeechRecognition(pane);
         if (!recognition) {
           alert('您的瀏覽器不支援語音辨識功能（建議使用 Chrome 或 Edge 瀏覽器）。');
           return;
@@ -515,9 +524,10 @@
         try {
           recognition.start();
           isRecording = true;
+          activeRecognitionPane = pane;
           btnMic.classList.add('recording');
           btnMic.innerText = '⏹ 停止';
-          document.getElementById('status-label').innerText = '正在聆聽語音...';
+          document.getElementById('status-label').innerText = pane === 'source' ? '正在聆聽來源語音...' : '正在聆聽目標語音...';
         } catch (e) {
           console.error(e);
         }
@@ -530,10 +540,15 @@
       if (recognition) {
         try { recognition.stop(); } catch(e){}
       }
+      if (activeRecognitionPane) {
+        const btnMic = document.getElementById(activeRecognitionPane === 'source' ? 'btn-mic-source' : 'btn-mic-target');
+        if (btnMic) {
+          btnMic.classList.remove('recording');
+          btnMic.innerText = '🎤 語音';
+        }
+      }
       isRecording = false;
-      const btnMic = document.getElementById('btn-mic');
-      btnMic.classList.remove('recording');
-      btnMic.innerText = '🎤 語音';
+      activeRecognitionPane = null;
       document.getElementById('status-label').innerText = '就緒';
     }
 
@@ -586,14 +601,25 @@
       const utterance = new SpeechSynthesisUtterance(text);
       const langVal = document.getElementById(langSelectId).value;
       
-      if (langVal && langVal !== 'autodetect') {
-        utterance.lang = langVal;
-      } else {
-        utterance.lang = 'zh-TW';
+      let lang = (langVal && langVal !== 'autodetect') ? langVal : 'zh-TW';
+      utterance.lang = lang;
+
+      // 精準尋找並綁定對應語系的語音物件（解決泰文 th-TH / 越南文等朗讀失效問題）
+      const voices = window.speechSynthesis.getVoices();
+      const matchedVoice = voices.find(v => v.lang === lang || v.lang.toLowerCase() === lang.toLowerCase() || v.lang.startsWith(lang.split('-')[0]));
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
       }
 
       utterance.rate = 1.0;
       window.speechSynthesis.speak(utterance);
+    }
+
+    // 確保語音清單非同步載入時可被抓取
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
 
     function handleSourceInput() {
@@ -821,7 +847,7 @@
         "語言配對": item.langpair,
         "原始文字": item.source,
         "翻譯結果": item.target,
-        "記錄時間": item.timestamp
+    "記錄時間": item.timestamp
       }));
 
       const ws = XLSX.utils.json_to_sheet(historyArray);
